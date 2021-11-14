@@ -1,14 +1,35 @@
-from scipy.stats import pearsonr, kendalltau
-a = [ 0.12128739493459102, 0.08102652289396785, 0.0966451095210617, 0.06436231017687573, 0.0643510059074385, 0.054309384405308504, 0.07362902118574298, 0.07119558221951146, 0.08728150356695365, 0.10254903788275156, 0.06996882200217606, 0.06965315862402971, 0.06637234844646515, 0.05683645335525334, 0.04457036705471457, 0.05803981477187338]
+'''
+from transformers import BertTokenizerFast,AutoModel
 
+tokenizer = BertTokenizerFast.from_pretrained("bert-base-chinese")
+model = AutoModel.from_pretrained("ckiplab/gpt2-base-chinese")
+s1 = "这是一个字"
+s2 = "这是另一个字"
+encoded_input = tokenizer(text=s1, text_pair=s2, return_tensors='pt', padding='max_length', max_length=90)
+print(encoded_input)
+output = model(**encoded_input)
+#print(output.keys())
+print(output.__dict__.keys())
+'''
+from transformers import GPT2Tokenizer, GPT2Model
+from transformers import AutoTokenizer, AutoModel
+'''
+tokenizer = AutoTokenizer.from_pretrained('uer/gpt2-chinese-cluecorpussmall')
+model = AutoModel.from_pretrained('uer/gpt2-chinese-cluecorpussmall')
+text = "Replace me by any text you'd like."
+encoded_input = tokenizer(text, return_tensors='pt')
+print(encoded_input)
+output = model(**encoded_input)
+print(output.__dict__.keys())
+'''
+from transformers import AutoTokenizer, AutoModel
 
-
-b = [0.10955334420938145, 0.05135686822016755, 0.1166896807409743, 0.05209782443461531, 0.07748514911394734, 0.06448937460508182, 0.08017284452788533, 0.06109377002140316, 0.0781966847657254, 0.09085348206997652, 0.10422108462462876, 0.06569576396194282, 0.0729815504946879, 0.06749843217006264, 0.07494602640608797, 0.06614053236963209
-     ]
-
-
-print(pearsonr(a, b))
-print(kendalltau(a, b))
-import torch
-data = torch.tensor([0.4])
-print(torch.sigmoid(data))
+from transformers import BertTokenizer, BartForConditionalGeneration, Text2TextGenerationPipeline, BartModel
+tokenizer = AutoTokenizer.from_pretrained("bert-base-chinese")
+model = BartModel.from_pretrained("fnlp/bart-base-chinese")
+text = "Replace me by any text you'd like."
+encoded_input = tokenizer(text, return_tensors='pt')
+print(encoded_input.keys())
+output = model(input_ids=encoded_input['input_ids'], attention_mask=encoded_input['attention_mask'])
+print(output.__dict__.keys())
+print(output.last_hidden_state)

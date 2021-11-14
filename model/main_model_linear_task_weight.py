@@ -10,12 +10,11 @@ import sys, os
 #使用注意力来辅助顶层模型分配对各个辅助任务模块的权重
 sys.path.append(os.path.dirname(os.getcwd()))
 from config import run_time, load_models
-from common.pytorch_pretrained_bert import BertModel, BertTokenizer
-
+from pytorch_pretrained_bert import BertModel
+from transformers import BertTokenizerFast,AutoModel
 import torch.nn as nn
 import torch
-from common.models import text_classification_model, NER_model, MRC_span
-import random,  pickle
+import random
 import numpy as np
 from model.model_base import get_model_base, get_supervisor_model
 random.seed(666)
@@ -27,7 +26,7 @@ class MultiTaskModel(nn.Module):
     
     def __init__(self, mode="work", main_task="text_similarity_LCQMC", supervised=False,
                  has_shared_encoder=False, init_task_attention=None,
-                 update_task_weight=True):
+                 update_task_weight=True, part_of_transformer="encoder"):
         super(MultiTaskModel, self).__init__()
         
         print('初始化计算图')
@@ -58,7 +57,15 @@ class MultiTaskModel(nn.Module):
         print("初始化硬共享的参数")
         #初始化bert
         print("预训练bert参数文件地址", run_time.PATH_BERT_BASE_DIR)
-        self.bert = BertModel.from_pretrained(run_time.PATH_BERT_BASE_DIR)
+        self.part_of_transformer = part_of_transformer
+        if self.part_of_transformer=="encoder":
+            self.bert = BertModel.from_pretrained(run_time.PATH_BERT_BASE_DIR)
+        elif self.part_of_transformer=="decoder":#https://huggingface.co/uer/gpt2-chinese-cluecorpussmall
+            self.bert = AutoModel.from_pretrained('uer/gpt2-chinese-cluecorpussmall')#AutoModel.from_pretrained("ckiplab/gpt2-base-chinese")
+        else:#https://huggingface.co/fnlp/bart-base-chinese
+            from transformers import BartModel
+            self.bert = BartModel.from_pretrained("fnlp/bart-base-chinese")
+
         for param in self.bert.parameters():
             param.requires_grad = True
 
@@ -87,9 +94,18 @@ class MultiTaskModel(nn.Module):
         token_ids, segment_ids, mask_ids, task_ids = inputs
         #print("task_ids", task_ids)
         #使用bert表示文本
-        self.input_representation, pooled = self.bert(token_ids, attention_mask=mask_ids,\
-                                     token_type_ids=segment_ids, output_all_encoded_layers=True, need_layer_no=12)
-        self.input_representation = self.input_representation[-1]#取第k层的输出
+        if self.part_of_transformer=="encoder":
+            self.input_representation, pooled = self.bert(token_ids, attention_mask=mask_ids,\
+                                         token_type_ids=segment_ids, output_all_encoded_layers=True)
+            self.input_representation = self.input_representation[-1]#取第k层的输出
+        elif self.part_of_transformer=='decoder':
+            result = self.bert(token_ids, attention_mask=mask_ids, token_type_ids=segment_ids)
+            self.input_representation = result.last_hidden_state
+            pooled = result.last_hidden_state[:, 0, :]
+        else:
+            result = self.bert(token_ids, attention_mask=mask_ids).last_hidden_state
+            self.input_representation = result
+            pooled = result[:, 0, :]
             
         # self.input_representation = self.dropout(self.input_representation)
         text_representation_of_each_task = {}

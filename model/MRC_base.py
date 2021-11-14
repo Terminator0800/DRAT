@@ -8,7 +8,7 @@ Created on 2021年8月6日
 from config import run_time
 import torch
 import torch.nn as nn
-from common.pytorch_pretrained_bert import BertModel, BertTokenizer
+from pytorch_pretrained_bert import BertModel
 
 class MRCSpan(nn.Module):
     

@@ -9,7 +9,7 @@ import sys, os
 
 sys.path.append(os.path.dirname(os.getcwd()))
 from config import run_time, load_models
-from common.pytorch_pretrained_bert import BertModel, BertTokenizer
+from pytorch_pretrained_bert import BertModel, BertTokenizer
 
 import torch.nn as nn
 import torch

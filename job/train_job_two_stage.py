@@ -12,16 +12,13 @@ from model.main_model_linear_task_weight import MultiTaskModel as MultiTaskModel
 import json
 from config import run_time
 from common.data_process import data_loader
-import torch.nn.functional as F
 from pytorch_pretrained_bert.optimization import BertAdam
+from transformers import AdamW
 import time
 import torch
-from torch import nn
 import numpy as np
-from common.data_process import base_processor
 import random as rander
 rander.seed(666)
-from common.utils.squad_evaluation import  compute_f1
 import copy
 from model import evaluation_tools
 
@@ -29,12 +26,12 @@ torch.backends.cudnn.enabled = True
 torch.backends.cudnn.benchmark = True
 class Trainer():
   
-    def __init__(self, supervised=True, separated_training=False, total_step=-1):
+    def __init__(self, supervised=True, separated_training=False, total_step=-1, part_of_transformer="encoder"):
 
         #'''
         #ernie
         self.learning_rate_for_models = 5e-6#2e-5#1e6e rnirgram bertbase
-        self.learning_rate_for_sub_task_model = 1e-3
+        self.learning_rate_for_sub_task_model = 5e-4
         self.learning_rate_for_supervisor = 1e-3
         self.learning_rate_for_task_weight = 1e-2
         #'''
@@ -42,6 +39,7 @@ class Trainer():
         self.supervised = supervised
         self.separated_training = separated_training
         self.total_step = total_step
+        self.part_of_transformer = part_of_transformer
         print("训练不熟是", total_step)
 
     def init_optimizer(self, model, multi_task_loss, total_step_num):
@@ -101,12 +99,12 @@ class Trainer():
         optimizer_grouped_parameters = [
             {'params': [p for n, p in base_models_parameters if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
             {'params': [p for n, p in base_models_parameters if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}]
+        # if self.if_shared_encoder_bert_family:
         self.base_model_optimizer = BertAdam(optimizer_grouped_parameters, lr=self.learning_rate_for_models,
-                             warmup=warmup, t_total=total_step_num)
-        # self.base_model_optimizer_II = BertAdam(optimizer_grouped_parameters, lr=1e-5,
-        #                      warmup=warmup, t_total=total_step_num)
-        # self.base_model_optimizer_II = \
-        #        torch.optim.Adam(optimizer_grouped_parameters, lr=1e-5)
+                         warmup=warmup, t_total=total_step_num)
+        # else:
+        #     self.base_model_optimizer = AdamW(optimizer_grouped_parameters, lr=self.learning_rate_for_models)
+
         ################顶层模型的优化器##################
         supervisor_model_paprameters = [
             {'params': [p for n, p in supervisor_model_paprameters if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
@@ -177,7 +175,8 @@ class Trainer():
             model = MultiTaskModelLinearTaskWeight(mode="train", main_task=main_task_name, \
                                                    supervised=supervised,
                                                    init_task_attention=init_task_attention,
-                                                   update_task_weight=update_task_weight)
+                                                   update_task_weight=update_task_weight,
+                                                   part_of_transformer=self.part_of_transformer)
         #############################
         self.main_task = main_task_name
         self.task_id_map = model.task_id_map
@@ -371,7 +370,7 @@ if __name__ == '__main__':
          "separated_training": True, "comment": "最好"}
 
     axuliary_task_plans = [
-                          ["text_similarity_LCQMC", "text_classification_THUCNews", "text_smililarity_atec", "text_classification_toutiao","text_similarity_CCKS2018",
+         ["text_similarity_LCQMC", "text_classification_THUCNews", "text_smililarity_atec", "text_classification_toutiao","text_similarity_CCKS2018",
                        "text_classification_tansongbo_hotel_comment", "NER_rmrb", "NER_CLUENER_public", "MRC_DRCD", "MRC_cmrc2018", \
                            "text_classification_chnsenticorp", "text_similarity_ChineseSTS", "text_classification_simplifyweibo_4_moods",
                            "NER_MSAR", "NER_rmrb_2014", "NER_boson", "NER_weibo", "MRC_chinese_SQuAD", "MRC_CAIL2019", "NER_CMNER",
@@ -386,13 +385,14 @@ if __name__ == '__main__':
 
         # ["text_similarity_CCKS2018", "NER_rmrb", "NER_CLUENER_public"],
     model_plan["supervised"] = True
-    run_time.ALL_AUXILIARY_TASK_LIST = ["MRC_DRCD"]#["MRC_DRCD"]#主任务##MRC_DRCD#text_classification_chnsenticorp#text_smililarity_atec#NER_MSAR
+    run_time.ALL_AUXILIARY_TASK_LIST = ["text_similarity_LCQMC"]#["MRC_DRCD"]#主任务##MRC_DRCD#text_classification_chnsenticorp#text_smililarity_atec#NER_MSAR
     stastics_mode = False#是否只计算任务权重
-    remove_rate = 0.67
+    remove_rate = 0.5
     pretrain_epoch, finetune_epoch = 10, 20#few tasks 10 epoch, many tasks 5 epoch
+    part_of_transformer = "whole"
     devset_size = -1
     PATH_BERT_BASE_DIR_list = [
-        "../../data/pretrained_models/model-ernie-gram-zh.1_torch",
+        "../../data/pretrained_models/chinese_bert_for_pytorch",
                                ]
     for subtask_list in axuliary_task_plans:
         subtask_list = [subtask_list] if type(subtask_list) == str else subtask_list
@@ -403,7 +403,7 @@ if __name__ == '__main__':
         for PATH_BERT_BASE_DIR in PATH_BERT_BASE_DIR_list:
             run_time.PATH_BERT_BASE_DIR = PATH_BERT_BASE_DIR
             for remove_some_tasks in [True]:#是否在训练过程中删除权重较低的任务
-                for train_set_size in [10000]:
+                for train_set_size in [100]:
                     for batch_size in [25]:
                         supervised, separated_training = model_plan["supervised"], model_plan["separated_training"]
                         separated_loss = "separated_loss" if model_plan.get("separated_loss")==True else "not_separated_loss"
@@ -431,7 +431,8 @@ if __name__ == '__main__':
 
                             trainer = Trainer(supervised=supervised, \
                                               separated_training=separated_training, \
-                                              total_step=int(len(run_time.ALL_AUXILIARY_TASK_LIST)*(pretrain_epoch + 1) * train_set_size / batch_size))
+                                              total_step=int(len(run_time.ALL_AUXILIARY_TASK_LIST)*(pretrain_epoch + 1) * train_set_size / batch_size),
+                                                                                                               part_of_transformer=part_of_transformer)
                             model, training_records_ori, task_attention = trainer.fit_pretraining(batch_size=batch_size, \
                                                                     train_set_size=train_set_size, devset_size=devset_size, epoch_num=pretrain_epoch,\
                                                                                                                 init_task_attention=init_task_attention,

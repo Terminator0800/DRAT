@@ -76,7 +76,7 @@ def get_supervisor_model(task_name, model_map):
     if task_name in ["text_similarity_LCQMC", "text_smililarity_atec", "text_similarity_afqmc"]:
         supervisor = text_classification_model.TextClassification(task_name, supervisor=True,
                                                                    class_num=2)
-        model_map[task_name] = text_classification_model.TextClassification(task_name, highway=False,
+        model_map[task_name] = text_classification_model.TextClassification(task_name, highway=True,
                                                                   class_num=2)
     if task_name in ["MRC_DRCD"]:
         supervisor = MRC_span.MRCSpan(task_name, supervisor=True)

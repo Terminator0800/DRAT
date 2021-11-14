@@ -9,13 +9,10 @@ import sys, os
 #使用注意力来辅助顶层模型分配对各个辅助任务模块的权重
 sys.path.append(os.path.dirname(os.getcwd()))
 from config import run_time, load_models
-from pytorch_pretrained_bert import BertModel, BertTokenizer
 
 import torch.nn as nn
 import torch
-from common.models import text_classification_model
 import random,  pickle
-import numpy as np
 import torch.nn.functional as F
 random.seed(666)
 

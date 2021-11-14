@@ -53,7 +53,7 @@ def evaluate_SIM(epoch, dev_data_batches, model, trainng_records, trainer, mode=
 #                 predict_logits = outputs[self.task_name_id_map["text_similarity_LCQMC"]][0]
         print(mode, "辅助模型的结果:")
         f1_score, accuracy = get_evaluation_metrics(confusion_matrix_aux, "基层模型", mode, task_weight=task_weight)
-    return f1_score + accuracy
+    return accuracy#f1_score + accuracy
 
 
 #计算span预测型阅读理解任务的EM正确率
