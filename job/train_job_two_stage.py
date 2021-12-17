@@ -30,8 +30,8 @@ class Trainer():
 
         #'''
         #ernie
-        self.learning_rate_for_models = 5e-6#2e-5#1e6e rnirgram bertbase
-        self.learning_rate_for_sub_task_model = 5e-4
+        self.learning_rate_for_models = 2e-6#2e-5#1e6e rnirgram bertbase
+        self.learning_rate_for_sub_task_model = 1e-3
         self.learning_rate_for_supervisor = 1e-3
         self.learning_rate_for_task_weight = 1e-2
         #'''
@@ -196,7 +196,7 @@ class Trainer():
         
         self.init_optimizer(model, multi_task_loss, len(training_data_batches)*epoch_num)
         model.to(self.device)
-        model = torch.nn.DataParallel(model)#, device_ids=run_time.GPU_IDS)#数据并行训练
+        # model = torch.nn.DataParallel(model)#, device_ids=run_time.GPU_IDS)#数据并行训练
         score_best = 0
         trainng_records = []#训练过程的记录
         print("开始训练")
@@ -226,7 +226,6 @@ class Trainer():
                     for i in range(len(task_attention_list)):
                         if task_attention_for_encoder[i]<task_attention[t_index]: task_attention_for_encoder[i] = 0.0
                 # print("task_attention_for_encoder", task_attention_for_encoder)
-
                 #计算损失值
                 loss, main_loss, top_loss = 0, 0, None
                 losses_in_each_task = [0 for _ in range(len(run_time.ALL_AUXILIARY_TASK_LIST))]
@@ -241,15 +240,18 @@ class Trainer():
                         if task_id != self.task_name_id_map[self.main_task]:
                             loss_of_this_task = multi_task_loss.forward(self.task_name_id_map[self.main_task], \
                                                            task_id, outputs[task_id][sub_task_id], real_outputs,
-                                                                task_attention[task_id])
+                                                                1)#task_attention[task_id])
+                            # print("loss_of_this_task", loss_of_this_task.item(), task_attention[task_id], task_attention_for_encoder[task_id] , task_attention_for_encoder[task_id]* loss_of_this_task.item())
+                            # if loss_of_this_task < 0.0001:
+                            #     task_attention_for_encoder[task_id] = 0.0
+                            #     print("任务", task_id, "exit")
                             loss = loss + task_attention_for_encoder[task_id] * loss_of_this_task
                             losses_in_each_task[task_id] = losses_in_each_task[task_id] + loss_of_this_task
-
                             loss_map_this_batch[task_id] = loss_of_this_task
                         else: # 遇到主任务，顺便计算顶层主任务的loss
                             loss_of_this_task = multi_task_loss.forward(self.task_name_id_map[self.main_task], \
                                                            task_id, outputs[task_id][sub_task_id], real_outputs,
-                                                                           task_attention[task_id], class_weight=class_weight)
+                                                                           1, class_weight=class_weight)
                             losses_in_each_task[task_id] = losses_in_each_task[task_id] + loss_of_this_task
                             loss_map_this_batch[task_id] = loss_of_this_task
                             if loss_of_this_task!=None:
@@ -265,7 +267,6 @@ class Trainer():
                         if loss_of_this_task>0:
                             learned_sample_count_each_task[run_time.ALL_AUXILIARY_TASK_LIST[task_id]] += 1
 
-
                 #计算梯度梯度
                 
                 #基于顶层模型的误差，更新所有参数
@@ -276,11 +277,11 @@ class Trainer():
                     self.base_model_optimizer.step()
 
                     for task_id in self.sub_task_optimizer_map:
-                        if task_id not in loss_map_this_batch or task_attention[task_id]==0: continue
+                        if task_id not in loss_map_this_batch: continue
                         #     #print("主任务不学习")
                         #     continue
                         model.zero_grad()
-                        this_loss = (loss_map_this_batch[task_id]/task_attention[task_id])#loss_map_this_batch[task_id]#
+                        this_loss = loss_map_this_batch[task_id]#/task_attention[task_id])#loss_map_this_batch[task_id]#
                         this_loss.backward(retain_graph=True)
                         #     if task_id == 0: continue
                         self.sub_task_optimizer_map[task_id].step()
@@ -387,12 +388,12 @@ if __name__ == '__main__':
     model_plan["supervised"] = True
     run_time.ALL_AUXILIARY_TASK_LIST = ["text_similarity_LCQMC"]#["MRC_DRCD"]#主任务##MRC_DRCD#text_classification_chnsenticorp#text_smililarity_atec#NER_MSAR
     stastics_mode = False#是否只计算任务权重
-    remove_rate = 0.5
-    pretrain_epoch, finetune_epoch = 10, 20#few tasks 10 epoch, many tasks 5 epoch
-    part_of_transformer = "whole"
+    remove_rate = 0.67
+    pretrain_epoch, finetune_epoch = 5, 20#few tasks 10 epoch, many tasks 5 epoch
+    part_of_transformer = "encoder"
     devset_size = -1
     PATH_BERT_BASE_DIR_list = [
-        "../../data/pretrained_models/chinese_bert_for_pytorch",
+        "../../data/pretrained_models/model-ernie-gram-zh.1_torch",
                                ]
     for subtask_list in axuliary_task_plans:
         subtask_list = [subtask_list] if type(subtask_list) == str else subtask_list
@@ -403,8 +404,9 @@ if __name__ == '__main__':
         for PATH_BERT_BASE_DIR in PATH_BERT_BASE_DIR_list:
             run_time.PATH_BERT_BASE_DIR = PATH_BERT_BASE_DIR
             for remove_some_tasks in [True]:#是否在训练过程中删除权重较低的任务
-                for train_set_size in [100]:
-                    for batch_size in [25]:
+                for train_set_size in [100]:#21064
+
+                    for batch_size in [30]:
                         supervised, separated_training = model_plan["supervised"], model_plan["separated_training"]
                         separated_loss = "separated_loss" if model_plan.get("separated_loss")==True else "not_separated_loss"
                         if type(subtask_list)==str:#单个辅助任务

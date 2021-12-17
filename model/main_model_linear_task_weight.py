@@ -45,7 +45,7 @@ class MultiTaskModel(nn.Module):
 
         all_task_id_model_map = { task_id: model_map[run_time.ALL_AUXILIARY_TASK_LIST[task_id]] \
                                                                     for task_id in range(len(run_time.ALL_AUXILIARY_TASK_LIST))}
-
+        model_map = None
         self.task_id_model_map = {self.task_name_id_map[task_name]: all_task_id_model_map[self.task_name_id_map[task_name]]\
                                     for task_name in run_time.ALL_AUXILIARY_TASK_LIST}
         print("模型们的id0", list(self.task_id_model_map.keys()))
@@ -70,7 +70,7 @@ class MultiTaskModel(nn.Module):
             param.requires_grad = True
 
         #主任务模型
-        p_init = 0.1#1.0/len(self.task_id_map)
+        p_init = 0.01#1.0/len(self.task_id_map)
         init_t = np.log(p_init/(1 - p_init))
         self.share_rate = nn.Parameter(torch.from_numpy(np.array([init_t])))
         if init_task_attention!=None:
@@ -149,7 +149,7 @@ class MultiTaskModel(nn.Module):
         task_weight_exp = torch.exp(self.task_weight)#/(len(self.task_weight) - 1)
         z = torch.sum(task_weight_exp[1:])
         task_weight = task_weight_exp/z
-        task_weight = (1.0 / (1.0 + torch.exp(-self.share_rate))) * task_weight  # (len(self.task_weight) - 1)
+        task_weight = (1 / (1.0 + torch.exp(-self.share_rate))) * task_weight  # (len(self.task_weight) - 1)
 
         # task_weight = torch.sigmoid(self.task_weight) / self.share_rate[0]
 
